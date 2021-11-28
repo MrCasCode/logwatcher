@@ -6,10 +6,12 @@ use std::io::ErrorKind;
 use std::io::SeekFrom;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 
 /// Where shall it starts to print from
+#[derive(Clone)]
 pub enum StartFrom {
     /// The beginning of the file
     Beginning,
@@ -19,6 +21,18 @@ pub enum StartFrom {
     End,
 }
 
+impl FromStr for StartFrom {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<StartFrom, Self::Err> {
+        match input {
+            "start" => Ok(StartFrom::Beginning),
+            "end" => Ok(StartFrom::End),
+            _      => Ok(StartFrom::End),
+        }
+    }
+}
+
 pub enum LogWatcherAction {
     None,
     SeekToEnd,
@@ -26,6 +40,7 @@ pub enum LogWatcherAction {
 
 pub struct LogWatcher {
     filename: String,
+    refresh_preiod: u32,
     inode: u64,
     pos: u64,
     reader: BufReader<File>,
@@ -36,6 +51,7 @@ impl LogWatcher {
     pub fn register<P: AsRef<Path>>(
         filename: P,
         starts_from: StartFrom,
+        refresh_period: u32
     ) -> Result<LogWatcher, io::Error> {
         let f = match File::open(&filename) {
             Ok(x) => x,
@@ -59,6 +75,7 @@ impl LogWatcher {
 
         Ok(LogWatcher {
             filename: filename.as_ref().to_string_lossy().to_string(),
+            refresh_preiod: refresh_period,
             inode: metadata.ino(),
             pos: starts_from,
             reader,
@@ -77,7 +94,7 @@ impl LogWatcher {
                     let metadata = match f.metadata() {
                         Ok(m) => m,
                         Err(_) => {
-                            sleep(Duration::new(1, 0));
+                            sleep(Duration::new(0, self.refresh_preiod * 1000));
                             continue;
                         }
                     };
@@ -90,13 +107,13 @@ impl LogWatcher {
                         self.pos = 0;
                         self.inode = metadata.ino();
                     } else {
-                        sleep(Duration::new(1, 0));
+                        sleep(Duration::new(0, self.refresh_preiod * 1000));
                     }
                     break;
                 }
                 Err(err) => {
                     if err.kind() == ErrorKind::NotFound {
-                        sleep(Duration::new(1, 0));
+                        sleep(Duration::new(0, self.refresh_preiod * 1000));
                         continue;
                     }
                 }

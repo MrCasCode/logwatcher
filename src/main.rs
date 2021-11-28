@@ -13,7 +13,7 @@ fn main() {
         }
     };
 
-    let mut log_watcher = LogWatcher::register(filename, StartFrom::End).unwrap();
+    let mut log_watcher = LogWatcher::register(filename, StartFrom::End, 50).unwrap();
 
     log_watcher.watch(&mut move |pos: u64, len: usize, line: String| {
         println!("Pos #{}, len {} char, Line: `{}`", pos, len, line);
